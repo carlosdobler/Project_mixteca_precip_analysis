@@ -1,0 +1,670 @@
+---
+title: "02_precip_analysis"
+author: "Carlos Dobler"
+date: "September 4, 2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load stars object}
+# source(here::here("01_prepare_array_alt.R")) # ~ 100 sec
+source(here::here("01_prepare_array.R")) # ~ 20 sec
+
+locs <- tribble(
+  ~lon, ~lat, ~loc,
+  -97.231, 17.448, "Nochixtlán",
+  -97.344, 17.526, "Yanhuitlán",
+  -97.572, 17.672, "Tamazulapan",
+  -97.679, 17.269, "Tlaxiaco",
+  -97.496, 16.642, "Amoltepec",
+  -97.226, 17.161, "Tamazola"
+)
+
+```
+
+
+
+## Mean weekly amount for all the Mixteca
+```{r}
+
+# With raster:
+
+# time_tbl <- tibble(time = time_vector, 
+#                    year = year(time),
+#                    month = month(time),
+#                    week = week(time))
+# 
+# week_index <- time_tbl %>% 
+#   group_by(year, week) %>% 
+#   mutate(id = group_indices())
+# 
+# weekly_agg_sp <- stackApply(chirps_stack, week_index$id, sum, na.rm = T)
+# 
+# 
+# week_index %>% 
+#   summarise(id = min(id)) %>% 
+#   ungroup() %>% 
+#   
+#   mutate(precip = pmap_dbl(., function(id, ...){
+#     
+#     weekly_agg_sp[[id]][] %>% 
+#       mean()
+#     
+#   })) %>% 
+#   
+#   group_by(week) %>% 
+#   summarise(precip_mean = mean(precip),
+#             precip_sd = sd(precip)) %>% 
+#   
+#   ggplot(aes(x = week)) +
+#   geom_ribbon(aes(ymin = precip_mean - precip_sd, ymax = precip_mean + precip_sd), fill = "red", alpha = 0.2) +
+#   geom_line(aes(y = precip_mean)) +
+#   scale_x_continuous(breaks = seq(1, 52, 52/12), labels = month.abb, expand = c(0,0)) +
+#   theme(axis.text.x = element_text(hjust = 0),
+#         panel.grid.minor = element_blank(),
+#         axis.title.x = element_blank()) +
+#   labs(y = "mm",
+#        caption = "
+#        Data source: CHIRPS-v2.0")
+  
+  
+  
+# With stars:
+
+tibble(time = st_get_dimension_values(chirps_stars, "time"),
+       year = year(time),
+       month = month(time),
+       week = week(time)) %>% 
+  
+  mutate(id = row_number()) %>% 
+  group_by(year, week) %>%
+  summarise(min_doy = min(id),
+            max_doy = max(id)) %>% 
+  ungroup() %>% 
+  
+  mutate(precip = pmap_dbl(., function(min_doy, max_doy, ...) {
+    
+    # chirps_stars[["precip"]][,,min_doy:max_doy] %>% 
+    #   apply(c(1,2), sum, na.rm = T) %>% 
+    #   mean()
+    
+    chirps_stars %>%
+      slice("time", min_doy:max_doy) %>% 
+      st_apply(c(1,2), sum, na.rm = T) %>% 
+      .[["sum"]] %>% 
+      mean()
+    
+  })) %>% 
+  
+  group_by(week) %>%
+  summarise(precip_mean = mean(precip),
+            precip_sd = sd(precip)) %>% 
+  
+  ggplot(aes(x = week)) +
+  geom_ribbon(aes(ymin = precip_mean - precip_sd, ymax = precip_mean + precip_sd), fill = "red", alpha = 0.2) +
+  geom_line(aes(y = precip_mean)) +
+  scale_x_continuous(breaks = seq(1, 52, 52/12), labels = month.abb, expand = c(0,0)) +
+  theme(axis.text.x = element_text(hjust = 0),
+        panel.grid.minor = element_blank(),
+        axis.title.x = element_blank()) +
+  labs(y = "mm",
+       caption = "
+       Data source: CHIRPS-v2.0")
+  
+# This does not work:
+# i <- 1L
+# chirps_stars[,,,i]
+# But this does:
+# chirps_stars[,,,1L]
+
+```
+
+# Spatial distribution of mean annual rainfall
+```{r}
+
+tibble(time = st_get_dimension_values(chirps_stars, "time"),
+       year = year(time),
+       month = month(time),
+       week = week(time)) %>% 
+  
+  mutate(id = row_number()) %>% 
+  group_by(year) %>% 
+  summarise(min_doy = min(id),
+            max_doy = max(id)) %>%
+  ungroup() %>% 
+  
+  pmap(., function(min_doy, max_doy, ...) {
+    
+    # chirps_stars[["precip"]][,,min_doy:max_doy] %>% 
+    #   apply(c(1,2), sum, na.rm = T) 
+    
+    chirps_stars %>%
+      slice("time", min_doy:max_doy) %>% 
+      st_apply(c(1,2), sum, na.rm = T)
+    
+  }) %>% 
+  
+  # {array(unlist(.), dim = c(nrow(.[[1]]), ncol(.[[1]]), length(.)))} %>% 
+  do.call(c, .) %>% 
+  merge() %>% 
+  st_apply(c(1,2), mean, na.rm = T) %>% 
+  # apply(c(1,2), mean, na.rm = T) -> m
+  
+  # expand.grid(x = st_get_dimension_values(chirps_stars, "longitude"),
+  #             y = st_get_dimension_values(chirps_stars, "latitude")) %>%
+  #   mutate(precip = as.vector(m)) %>% 
+    
+    # ggplot(data = .) +
+    # geom_raster(aes(x = x, y = y, fill = precip)) +
+    # geom_point(data = locs, aes(x = lon, y = lat)) +
+    # geom_text(data = locs, aes(x = lon, y = lat, label = loc), hjust = 0, nudge_x = 0.03) +
+    # viridis::scale_fill_viridis(option = "C", direction = -1, name = "mm/year") +
+    # coord_quickmap() +
+    # theme(axis.title = element_blank())
+  
+    {ggplot() +
+      geom_stars(data = .) + 
+      viridis::scale_fill_viridis(option = "C", direction = -1, name = "mm/year") +
+      geom_point(data = locs, aes(x = lon, y = lat)) +
+      geom_text(data = locs, aes(x = lon, y = lat, label = loc), vjust = 1, nudge_y = -0.02, nudge_x = 0.05, size = 3) +
+      coord_quickmap() +
+      theme(axis.title = element_blank())}
+  
+```
+
+# Probability distribution (variability)
+```{r}
+
+tibble(time = st_get_dimension_values(chirps_stars, "time"),
+       year = year(time)) %>% 
+  
+  mutate(id = row_number()) %>% 
+  group_by(year) %>%
+  summarise(min_doy = min(id),
+            max_doy = max(id)) %>% 
+  ungroup() %>% 
+  
+  mutate(precip = pmap_dbl(., function(min_doy, max_doy, ...) {
+    
+    # chirps_stars[["precip"]][,,min_doy:max_doy] %>% 
+    #   apply(c(1,2), sum, na.rm = T) %>% 
+    #   mean()
+    
+    chirps_stars %>%
+      slice("time", min_doy:max_doy) %>% 
+      st_apply(c(1,2), sum, na.rm = T) %>% 
+      .[["sum"]] %>% 
+      mean()
+    
+  })) -> m
+  
+tibble(x = density(m$precip, bw = 50)$x,
+       y = density(m$precip, bw = 50)$y) %>% 
+  
+       {
+         
+         ggplot(., aes(x = x, y = y)) +
+           geom_area(color = "black", fill = "red", alpha = 0.2) +
+           
+           annotate("segment", 
+                    x = quantile(m$precip, probs=0.2), xend = quantile(m$precip, probs=0.2), 
+                    y = 0, yend = .$y[near(.$x, quantile(m$precip, 0.2), 1)][1], 
+           linetype = "dashed") +
+           
+           annotate("segment", 
+                    x = quantile(m$precip, probs=0.8), xend = quantile(m$precip, probs=0.8), 
+                    y = 0, yend = .$y[near(.$x, quantile(m$precip, 0.8), 1)][1], 
+           linetype = "dashed") +
+           
+           annotate("text", 
+                    x = c(quantile(m$precip, probs=0.2)-50, quantile(m$precip, probs=0.8)+50), 
+                    y = quantile(.$y, 0.45), 
+           label = "1/5") +
+           
+           labs(y = "density",
+                x = "mm/year")
+           
+       }
+
+```
+
+# Spatial distribution of variability 
+```{r}
+tibble(time = st_get_dimension_values(chirps_stars, "time"),
+       year = year(time),
+       month = month(time),
+       week = week(time)) %>% 
+  
+  mutate(id = row_number()) %>% 
+  group_by(year) %>% 
+  summarise(min_doy = min(id),
+            max_doy = max(id)) %>%
+  ungroup() %>% 
+  
+  pmap(., function(min_doy, max_doy, ...) {
+    
+    # chirps_stars[["precip"]][,,min_doy:max_doy] %>% 
+    #   apply(c(1,2), sum, na.rm = T) 
+    
+    chirps_stars %>%
+      slice("time", min_doy:max_doy) %>% 
+      st_apply(c(1,2), sum, na.rm = T)
+    
+  }) %>% 
+  
+  # {array(unlist(.), dim = c(nrow(.[[1]]), ncol(.[[1]]), length(.)))} %>% 
+  # apply(c(1,2), sd, na.rm = T) -> m
+  
+  do.call(c, .) %>% 
+  merge() %>% 
+  st_apply(c(1,2), sd, na.rm = T) %>% 
+
+# expand.grid(x = st_get_dimension_values(chirps_stars, "longitude"),
+#             y = st_get_dimension_values(chirps_stars, "latitude")) %>%
+#   mutate(precip = as.vector(m)) %>%
+#             
+#   ggplot(data = .) +
+#   geom_raster(aes(x = x, y = y, fill = precip)) +
+#   geom_point(data = locs, aes(x = lon, y = lat)) +
+#   geom_text(data = locs, aes(x = lon, y = lat, label = loc), hjust = 0, nudge_x = 0.03) +
+#   viridis::scale_fill_viridis(option = "C",
+#   direction = -1,
+#   name = "mm/year") +
+#   coord_quickmap() +
+#   theme(axis.title = element_blank())
+
+  {
+  
+    ggplot() +
+      geom_stars(data = .) + 
+      viridis::scale_fill_viridis(option = "C", direction = -1, name = "mm/year") +
+      geom_point(data = locs, aes(x = lon, y = lat)) +
+      geom_text(data = locs, aes(x = lon, y = lat, label = loc), vjust = 1, nudge_y = -0.02, nudge_x = 0.05, size = 3) +
+      coord_quickmap() +
+      theme(axis.title = element_blank())
+}
+
+```
+
+# Spatial distribution of seasonality
+```{r}
+my_breaks <- seq(1, 365, 365/12) %>% round() %>% .[4:12]
+my_labels <- format(as_date(my_breaks), format = "%b")
+
+
+# could this work with st_apply?
+
+map_df(seq_along(st_get_dimension_values(chirps_stars, "longitude")), function(c){
+  map_df(seq_along(st_get_dimension_values(chirps_stars, "latitude")), function(r){
+    
+    m <- chirps_stars %>% 
+      slice("longitude", c) %>% 
+      slice("latitude", r) %>% 
+      as_tibble() %>% 
+  
+      mutate(year = year(time)) %>% 
+      group_by(year) %>% 
+      mutate(doy = row_number()) %>% 
+      ungroup()
+      
+    m %>% 
+      group_by(doy) %>% 
+      summarize(daily_mean = mean(precip)) %>% 
+      mutate(anomaly = daily_mean - mean(m$precip),
+             cum_anomaly = cumsum(anomaly)) %>% #.$cum_anomaly %>% plot(type = "l")
+      summarize(onset = which.min(cum_anomaly),
+                cessation = which.max(cum_anomaly)) %>% 
+      mutate(lon = st_get_dimension_values(chirps_stars, "longitude")[c],
+             lat = st_get_dimension_values(chirps_stars, "latitude")[r],
+             c = c,
+             r = r)
+      
+  })
+}) -> seas #%>% 
+
+    gather(onset:cessation, key = seas, val = doy) %>% 
+    mutate(seas = factor(seas, levels = c("onset", "cessation"))) %>% 
+    
+    ggplot(.) +
+    geom_raster(aes(x = lon, y = lat, fill = doy)) +
+    scale_fill_gradientn(colors = RColorBrewer::brewer.pal(11, "Spectral"),
+                        limits = c(92, 365),
+                        breaks = my_breaks,
+                        labels = my_labels,
+                        guide = guide_colorbar(label.vjust = 0, barheight = 8)) +
+    facet_grid(~seas) +
+    geom_point(data = locs, aes(x = lon, y = lat)) +
+    geom_text(data = locs, aes(x = lon, y = lat, label = loc), vjust = 1, nudge_y = -0.02, nudge_x = 0.05, size = 3) +
+    coord_quickmap() +
+    theme(axis.title = element_blank())
+
+```
+
+# CHANGES
+
+## Changes in amount (all Mixteca)
+```{r}
+
+tibble(time = st_get_dimension_values(chirps_stars, "time"),
+       year = year(time)) %>% 
+  
+  mutate(id = row_number()) %>% 
+  group_by(year) %>% 
+  summarise(min_doy = min(id),
+            max_doy = max(id)) %>%
+  ungroup() %>% 
+  
+  pmap(., function(min_doy, max_doy, ...) {
+    
+    chirps_stars %>%
+      slice("time", min_doy:max_doy) %>% 
+      st_apply(c(1,2), sum, na.rm = T)
+    
+  }) %>% 
+  
+  do.call("c", .) %>% 
+  merge() %>% 
+  
+  st_apply(c(1,2), function(x) ecdf(x)(x)) %>% 
+  st_set_dimensions(1, 
+                    name = "year", 
+                    values = st_get_dimension_values(chirps_stars, "time") %>% 
+                      year() %>% 
+                      unique()) %>% 
+  as_tibble() %>%
+  
+  ggplot(aes(x = X, y = as.character(year), fill = ..x..)) +
+  ggridges::geom_density_ridges_gradient(scale = 2) +
+  viridis::scale_fill_viridis(option = "C", direction = -1) +
+  guides(fill = F) +
+  scale_x_continuous(breaks = c(0, 0.5, 1)) +
+  theme(axis.title.y = element_blank()) +
+  labs(x = 'Percentil
+       \u2190   Seco                         Húmedo  \u2192    ',
+       caption = "
+       Datos: CHIRPS-v2.0")
+
+```
+
+# Significant changes by cell
+
+```{r}
+
+tibble(time = st_get_dimension_values(chirps_stars, "time"),
+       year = year(time)) %>% 
+  
+  mutate(id = row_number()) %>% 
+  group_by(year) %>% 
+  summarise(min_doy = min(id),
+            max_doy = max(id)) %>%
+  ungroup() %>% 
+  
+  pmap(., function(min_doy, max_doy, ...) {
+    
+    chirps_stars %>%
+      slice("time", min_doy:max_doy) %>% 
+      st_apply(c(1,2), sum, na.rm = T)
+    
+  }) %>% 
+  
+  do.call("c", .) %>% 
+  merge() -> m
+  
+# This should be Mann-Kendall
+p_val <- m %>% 
+    st_apply(c(1,2), function(x){
+      
+      tibble(mm = as.vector(x),
+             year = st_get_dimension_values(chirps_stars, "time") %>% year() %>% unique()) %>% 
+        
+        mblm::mblm(mm ~ year, data = ., repeated = F) %>% 
+        summary() %>% 
+        coefficients() %>% 
+        .[2,4] %>% 
+        {ifelse(. > 0.05, 1, NA)}
+      
+      }) %>% 
+  as_tibble() %>% 
+  filter(!is.na(X))
+
+
+  m %>% 
+    st_apply(c(1,2), function(x){
+      
+      tibble(mm = as.vector(x),
+             year = st_get_dimension_values(chirps_stars, "time") %>% year() %>% unique()) %>% 
+        
+        mblm::mblm(mm ~ year, data = ., repeated = F) %>% 
+        summary() %>% 
+        coefficients() %>% 
+        .[2,1]
+      
+      }) %>% 
+    
+      {
+        
+        ggplot() +
+          geom_stars(data = .) +
+          geom_point(data = p_val, aes(x = longitude, y = latitude), shape = 4) +
+          scale_fill_distiller(palette = "RdBu", 
+                               limits = c(-18, 18), 
+                               direction = 1,
+                               breaks = c(-16, 0, 16),
+                               name = "mm/year") +
+          geom_point(data = locs, aes(x = lon, y = lat)) +
+          geom_text(data = locs, aes(x = lon, y = lat, label = loc), vjust = 1, nudge_y = -0.02, nudge_x = 0.05, size = 3) +
+          coord_quickmap() +
+          theme(axis.title = element_blank())
+        
+      }
+  
+  # Test  
+  # chirps_stars[,1,6,] %>% 
+  #   as_tibble() %>% 
+  #   mutate(year = year(time), 
+  #          precip = as.vector(precip)) %>% 
+  #   group_by(year) %>% 
+  #   summarize(precip = sum(precip)) %>% 
+  # {summary(mblm::mblm(precip ~ year, data = ., repeated = F))}
+    
+```
+
+## Changes in variability
+
+```{r}
+
+tibble(time = st_get_dimension_values(chirps_stars, "time"),
+       year = year(time)) %>% 
+  
+  mutate(id = row_number()) %>% 
+  group_by(year) %>% 
+  summarise(min_doy = min(id),
+            max_doy = max(id)) %>%
+  ungroup() %>% 
+  
+  pmap(., function(min_doy, max_doy, ...) {
+    
+    chirps_stars %>%
+      slice("time", min_doy:max_doy) %>% 
+      st_apply(c(1,2), sum, na.rm = T)
+    
+  }) %>% 
+  
+  do.call("c", .) %>% 
+  merge() -> m
+  
+# This should be Mann-Kendall
+p_val <- m %>% 
+    st_apply(c(1,2), function(x){
+      
+      tibble(mm = as.vector(x),
+             year = st_get_dimension_values(chirps_stars, "time") %>% year() %>% unique()) %>% 
+        .$mm %>% 
+        
+        # mblm::mblm(mm ~ year, data = ., repeated = F) %>% 
+        # summary() %>% 
+        # coefficients() %>% 
+        # .[2,4] %>% 
+        
+        trend::mk.test(.) %>% .$p.value %>% 
+        
+        {ifelse(. > 0.1, 1, NA)}
+      
+      }) %>% 
+  as_tibble() %>% 
+  filter(!is.na(X))
+
+
+  m %>% 
+    st_apply(c(1,2), function(x){
+      
+      tibble(a = as.vector(x)[-length(x)],
+             b = as.vector(x)[-1],
+             dif = abs(a-b),
+             year = st_get_dimension_values(chirps_stars, "time") %>% year() %>% unique() %>% .[-1]) %>% 
+        .$dif %>% 
+        
+        # mblm::mblm(dif ~ year, data = ., repeated = F) %>% 
+        # summary() %>% 
+        # coefficients() %>% 
+        # .[2,1]
+        
+        trend::sens.slope(.) %>% .$estimates %>% as.numeric()
+      
+      }) %>% 
+    
+      {
+        
+        ggplot() +
+          geom_stars(data = .) +
+          geom_point(data = p_val, aes(x = longitude, y = latitude), shape = 4) +
+          scale_fill_distiller(palette = "RdBu",
+                               limits = c(-5.5, 5.5),
+                               direction = -1,
+                               breaks = c(-5, 0, 5),
+                               name = "mm/year") +
+          geom_point(data = locs, aes(x = lon, y = lat)) +
+          geom_text(data = locs, aes(x = lon, y = lat, label = loc), vjust = 1, nudge_y = -0.02, nudge_x = 0.05, size = 3) +
+          coord_quickmap() +
+          theme(axis.title = element_blank())
+        
+      }
+  
+  
+```
+
+## Changes in seasonality
+```{r}
+
+map_df(seq_along(st_get_dimension_values(chirps_stars, "longitude")), function(c){
+  map_df(seq_along(st_get_dimension_values(chirps_stars, "latitude")), function(r){
+    
+    m <- chirps_stars %>% 
+      slice("longitude", c) %>% 
+      slice("latitude", r) %>% 
+      as_tibble() %>% 
+  
+      mutate(year = year(time)) %>% 
+      group_by(year) %>% 
+      mutate(doy = row_number()) %>% 
+      ungroup()
+      
+    m %>% 
+      group_by(doy) %>% 
+      summarize(daily_mean = mean(precip)) %>% 
+      mutate(anomaly = daily_mean - mean(m$precip),
+             cum_anomaly = cumsum(anomaly)) %>% #.$cum_anomaly %>% plot(type = "l")
+      summarize(onset = which.min(cum_anomaly),
+                cessation = which.max(cum_anomaly)) %>% 
+      mutate(lon = st_get_dimension_values(chirps_stars, "longitude")[c],
+             lat = st_get_dimension_values(chirps_stars, "latitude")[r],
+             c = c,
+             r = r)
+      
+  })
+}) -> seas
+
+seas %>% 
+  pmap_df(function(onset, cessation, c, r, lon, lat){
+    
+    chirps_stars %>% 
+      slice("longitude", c) %>% 
+      slice("latitude", r) %>% 
+      
+      as_tibble() %>% 
+      mutate(daily_mean = mean(precip),
+             anomaly = precip - daily_mean,
+             year = year(time)) %>% 
+      group_by(year) %>% 
+      mutate(cum_anomaly = cumsum(anomaly),
+             doy = row_number()) %>%
+      
+      mutate(cum_anomaly_onset = ifelse(onset - 60 <= doy & onset + 60 >= doy, cum_anomaly, NA),
+             cum_anomaly_cessation = ifelse(cessation - 60 <= doy & cessation + 60 >= doy, cum_anomaly, NA)) %>%
+
+      summarise(onset = which.min(cum_anomaly_onset),
+                cessation = which.max(cum_anomaly_cessation)) %>%
+
+      summarise(mk_onset = trend::mk.test(onset) %>% .$p.value,
+             sen_onset = trend::sens.slope(onset) %>% .$estimates %>% as.numeric(),
+             mk_cessation = trend::mk.test(cessation) %>% .$p.value,
+             sen_cessation = trend::sens.slope(cessation) %>% .$estimates %>% as.numeric()) %>% 
+      
+      mutate(lon = lon,
+             lat = lat)
+                
+}) -> m
+
+mk <- m %>% 
+  select(mk_onset, mk_cessation, lon, lat) %>% 
+  gather(1:2, key = seas, val = mk) %>% 
+  mutate(mk = ifelse(mk < 0.1, 1, NA),
+         seas = str_sub(seas, start = 4),
+         seas = factor(seas, levels = c("onset", "cessation"))) %>% 
+  filter(!is.na(mk))
+
+m %>% 
+  select(sen_onset, sen_cessation, lon, lat) %>% 
+  gather(1:2, key = seas, val = sen) %>% 
+  mutate(seas = str_sub(seas, start = 5),
+         seas = factor(seas, levels = c("onset", "cessation"))) %>% 
+  
+  ggplot() +
+  geom_raster(aes(x = lon, y = lat, fill = sen)) +
+  geom_point(data = mk, aes(x = lon, y = lat), shape = 4, alpha = 0.5) +
+  scale_fill_distiller(palette = "PuOr",
+                               limits = c(-1.1, 1.1),
+                               direction = -1,
+                               breaks = c(-1, 0, 1),
+                       labels = c("-1 (later)", "0 (no change)", "1 (sooner)"),
+                               name = "days/year") +
+  facet_grid(~seas) +
+  coord_quickmap()
+
+```
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
