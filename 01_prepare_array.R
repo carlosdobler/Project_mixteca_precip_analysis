@@ -1,8 +1,8 @@
 
 # SCRIPT TO:
 #   - Extract CHIRPS data from NetCDF files
-#   - Build a stars object for Mixteca
-# *****************************************
+#   - Build a stars object for Mixteca Alta
+# *******************************************
 
 
 # Load libraries
@@ -30,15 +30,21 @@ func_get_nc_coord <- function(dimension, coord, tol){
     round(3)
 }
 
-# max_lon <- func_get_nc_coord(ncin$dim$longitude$vals, -97.007, 0.03)
-# min_lon <- func_get_nc_coord(ncin$dim$longitude$vals, -97.909, 0.03)
-# max_lat <- func_get_nc_coord(ncin$dim$latitude$vals, 17.794, 0.03)
-# min_lat <- func_get_nc_coord(ncin$dim$latitude$vals, 16.505, 0.03)
+# (Mixteca)
+# Papers used to approximate the extent:
+# http://www.scielo.org.mx/pdf/sh/v19n38/1665-4420-sh-19-38-00056.pdf
+# http://www.scielo.org.mx/pdf/desacatos/n27/n27a2.pdf
 
-max_lon <- func_get_nc_coord(ncin$dim$longitude$vals, -86.086, 0.03)
-min_lon <- func_get_nc_coord(ncin$dim$longitude$vals, -92.345, 0.03)
-max_lat <- func_get_nc_coord(ncin$dim$latitude$vals, 22.130, 0.03)
-min_lat <- func_get_nc_coord(ncin$dim$latitude$vals, 17.774, 0.03)
+max_lon <- func_get_nc_coord(ncin$dim$longitude$vals, -97.007, 0.03)
+min_lon <- func_get_nc_coord(ncin$dim$longitude$vals, -97.909, 0.03)
+max_lat <- func_get_nc_coord(ncin$dim$latitude$vals, 17.794, 0.03)
+min_lat <- func_get_nc_coord(ncin$dim$latitude$vals, 16.505, 0.03)
+
+# (Yucatan peninsula)
+# max_lon <- func_get_nc_coord(ncin$dim$longitude$vals, -86.086, 0.03)
+# min_lon <- func_get_nc_coord(ncin$dim$longitude$vals, -92.345, 0.03)
+# max_lat <- func_get_nc_coord(ncin$dim$latitude$vals, 22.130, 0.03)
+# min_lat <- func_get_nc_coord(ncin$dim$latitude$vals, 17.774, 0.03)
 
 # Obtain sequence of coordinates and position
 range_lon_coord <- seq(min_lon, max_lon, by = 0.05)
@@ -50,7 +56,6 @@ range_lat_pos <- map_int(range_lat_coord, function(i) which(near(ncin$dim$latitu
 orig <- ncin$dim$time$units %>%
   str_split(" ", simplify = T) %>% 
   .[,3]
-
 
 
 # Create super stars object ***********************************************************************
@@ -70,7 +75,7 @@ chirps_stars <- map(seq_along(chirps_files), function(yr){
                             range_lat_pos[1],
                             1),
                   count = c(length(range_lon_pos),
-                            length(range_lon_pos),
+                            length(range_lat_pos),
                             length(ncin_dates)))
   )
   
@@ -84,6 +89,7 @@ chirps_stars <- map(seq_along(chirps_files), function(yr){
   do.call(c, .) # Combine
 toc() # 20.87 sec
 
+rm(list=setdiff(ls(), "chirps_stars"))
 
 # END *********************************************************************************************
 

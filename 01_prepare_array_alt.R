@@ -37,11 +37,9 @@ min_lon <- func_get_nc_coord(ncin$dim$longitude$vals, -97.909, 0.03)
 max_lat <- func_get_nc_coord(ncin$dim$latitude$vals, 17.794, 0.03)
 min_lat <- func_get_nc_coord(ncin$dim$latitude$vals, 16.505, 0.03)
 
-# Obtain sequence of coordinates and position
+# Obtain sequence of coordinates
 range_lon_coord <- seq(min_lon, max_lon, by = 0.05)
-range_lon_pos <- map_int(range_lon_coord, function(i) which(near(ncin$dim$longitude$vals, i, 0.01)))
 range_lat_coord <- seq(min_lat, max_lat, by = 0.05)
-range_lat_pos <- map_int(range_lat_coord, function(i) which(near(ncin$dim$latitude$vals, i, 0.01)))
 
 # Obtain origin date
 orig <- ncin$dim$time$units %>%
@@ -51,12 +49,17 @@ orig <- ncin$dim$time$units %>%
   {.+ncin$dim$time$vals[1]}
 
 # Create super raster stack ***********************************************************************
+
 tic()
-chirps_stack <- map(seq_along(chirps_files), function(i){
+
+# Loop through all annual files
+chirps_stack <- map(seq_along(chirps_files), function(yr){
   
-  nc <- chirps_files[i] %>% 
+  # Open connection
+  nc <- chirps_files[yr] %>% 
     nc_open()
   
+  # Extract data (results in an array)
   data <- ncvar_get(nc, 
                     "precip",
                     start = c(which(near(ncin$dim$longitude$vals, min_lon, 0.01)), # left-most
@@ -66,8 +69,8 @@ chirps_stack <- map(seq_along(chirps_files), function(i){
                               length(range_lat_coord), 
                               -1)) # all entries in time dim
   
-  # Rotate data
-  map(seq_len(dim(data)[3]), function(yr){
+  # Rotate data (loop through doys)
+  map(seq_len(dim(data)[3]), function(doy){
     empty_matrix <- matrix(NA, dim(data)[2], dim(data)[1])
     for(r in seq_along(range_lat_coord)){
       for(c in seq_along(range_lon_coord)){
@@ -75,6 +78,7 @@ chirps_stack <- map(seq_along(chirps_files), function(i){
       }
     }
     
+    # Convert to raster
     empty_matrix %>% 
       raster(xmx = max_lon,
              xmn = min_lon,
@@ -83,19 +87,22 @@ chirps_stack <- map(seq_along(chirps_files), function(i){
              crs = "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0")
     
   }) %>% 
-    stack()
+    stack() # one year
 
 }) %>% 
-  stack()
+  stack() # all years
+
 toc()
 
+
+# Create vector of all dates
 time_vector <- seq(
   orig,
   as_date(dim(chirps_stack)[3], origin = orig - days(1)),
   by = "1 day"
 )
 
-
-
+# Clean-up
+rm(list=ls()[!ls() %in% c("chirps_stack", "time_vector")])
 
 
