@@ -10,12 +10,11 @@ Con este reporte buscamos solventar estas carencias, proporcionando una caracter
 
 ## 1. Climatología pluvial de la Mixteca Alta
 
-
 La Mixteca Alta recibe en promedio 1182 mm de lluvia anuales. La distribución de la precipitación a lo largo del año es marcadamente estacional (Fig. 1). La estación lluviosa, la cual de manera general inicia en mayo y concluye en octubre, concentra el 87% de la precipitación anual. Dentro de la estación lluviosa se observa un patrón de distribución bimodal, con máximos a mediados de junio y finales de agosto. Entre los máximos, la precipitación presenta una disminución relativa, o canícula, manifestándose de manera más acentuada a finales de julio.
 
 <img src="02_precip_analysis_files/figure-markdown_github/1-mean_temporal_dist-1.png" alt="Fig. 1. Distribución temporal de la precipitación (mm/semana)." width="70%" />
 <p class="caption">
-*Fig. 1. Distribución temporal de la precipitación (mm/semana).*
+Fig. 1. Distribución temporal de la precipitación (mm/semana).
 </p>
 
 Con respecto a su distribución espacial, los patrones de precipitación se podrían dividir en dos zonas (Fig. 2). Mientras los valles del noreste son más secos, con acumulaciones de entre 500 y 800 mm al año, la serranía del suroeste es mucho más húmeda, recibiendo entre 1,500 y 2,000 mm al año. \[sombra orográfica?\]
