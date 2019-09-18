@@ -15,7 +15,7 @@ La Mixteca Alta recibe en promedio 1182 mm de lluvia anuales. La distribución d
 
 <img src="02_precip_analysis_files/figure-markdown_github/1-mean_temporal_dist-1.png" alt="Fig. 1. Distribución temporal de la precipitación (mm/semana)." width="70%" />
 <p class="caption">
-Fig. 1. Distribución temporal de la precipitación (mm/semana).
+*Fig. 1. Distribución temporal de la precipitación (mm/semana).*
 </p>
 
 Con respecto a su distribución espacial, los patrones de precipitación se podrían dividir en dos zonas (Fig. 2). Mientras los valles del noreste son más secos, con acumulaciones de entre 500 y 800 mm al año, la serranía del suroeste es mucho más húmeda, recibiendo entre 1,500 y 2,000 mm al año. \[sombra orográfica?\]
