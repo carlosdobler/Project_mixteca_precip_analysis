@@ -1,14 +1,15 @@
 Caracterización del régimen pluvial de la Mixteca Alta, Oaxaca, y sus cambios (1981 - 2018)
 ================
 Carlos Dobler
+
 September 4, 2019
 
 El presente reporte documenta los patrones de precipitación de la Mixteca Alta y sus cambios durante los últimos 38 años. Para su elaboración, se analizó la base de datos de precipitación en malla CHIRPS version 2.0 (Funk et al., 2015). Combinando imágenes infrarrojo de nubes y datos de estaciones meteorológicas, CHIRPS (*Climate Hazards group Infrared Precipitation with Stations*) estima la cantidad de precipitación recibida a nivel diario, globalmente, con una resolución espacial de 0.05° (~5 km). Dadas estas características, CHIRPS tiene el potencial de proveer información detallada en regiones con una pobre cobertura espacial y temporal de datos climáticos. Tal es el caso de la Mixteca Alta. Con una extensión de ??? km<sup>2</sup>, la región cuenta con tan solo 4 estaciones, todas con vacíos del orden de décadas (obtenido del documento que preparó Quetzal).
 
 Con este reporte buscamos solventar estas carencias, proporcionando una caracterización continua en tiempo y espacio de la lluvia en la Mixteca Alta. Nos enfocamos en analizar tres aspectos principales de los patrones de precipitación de la región: su magnitud (cantidad), su estacionalidad, y su variabilidad interananual. En la primera sección se presenta la climatología de la región, o el comportamiento promedio de la lluvia desde 1981 hasta el 2018. En la segunda sección se reporta un análisis de tendencias durante el mismo periodo cuyo fin fue detectar si ha habido cambios en dichos patrones y dónde.
 
-1. Climatología pluvial de la Mixteca Alta
-==========================================
+## 1. Climatología pluvial de la Mixteca Alta
+
 
 La Mixteca Alta recibe en promedio 1182 mm de lluvia anuales. La distribución de la precipitación a lo largo del año es marcadamente estacional (Fig. 1). La estación lluviosa, la cual de manera general inicia en mayo y concluye en octubre, concentra el 87% de la precipitación anual. Dentro de la estación lluviosa se observa un patrón de distribución bimodal, con máximos a mediados de junio y finales de agosto. Entre los máximos, la precipitación presenta una disminución relativa, o canícula, manifestándose de manera más acentuada a finales de julio.
 
@@ -45,8 +46,7 @@ En su dimensión espacial, la variabilidad interanual también sigue un patrón 
 Fig. 5. Distribución espacial de la variabilidad interanual de la precipitación.
 </p>
 
-2. Tendencias
-=============
+## 2. Tendencias
 
 En la figura 6 se presentan las anomalías pluviales por año con respecto al comportamiento promedio. Se puede observar que en los primeros años del periodo de estudio (i.e. de 1981 a 1994), la Mixteca estuvo bajo condiciones más secas de lo normal. Por el contrario, los últimos años acumularon más lluvia de lo normal (i.e. del 2010 al 2018), con excepción del 2016. Ese año, junto con 1982 y 1988, corresponden a los años más secos dentro del periodo de estudio. Los años 2010, 2014, y 2017 representan los años más húmedos.
 
