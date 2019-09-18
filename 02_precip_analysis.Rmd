@@ -1,20 +1,27 @@
 ---
-title: "02_precip_analysis"
+title: Caracterización del régimen pluvial de la Mixteca Alta, Oaxaca, y sus cambios
+  (1981 - 2018)
 author: "Carlos Dobler"
 date: "September 4, 2019"
-output: html_document
-editor_options: 
+output: github_document
+editor_options:
   chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE, 
+                      message = FALSE, 
+                      warning=FALSE, 
+                      out.width = '70%', 
+                      fig.align = 'center')
 ```
 
-```{r load stars object}
-# source(here::here("01_prepare_array_alt.R")) # ~ 100 sec
+```{r prep, include = FALSE}
+
+# Load stars object
 source(here::here("01_prepare_array.R")) # ~ 20 sec
 
+# Towns of reference
 locs <- tribble(
   ~lon, ~lat, ~loc,
   -97.231, 17.448, "Nochixtlán",
@@ -27,58 +34,98 @@ locs <- tribble(
 
 ```
 
+El presente reporte documenta los patrones de precipitación de la Mixteca Alta y sus cambios durante los últimos 38 años. Para su elaboración, se analizó la base de datos de precipitación en malla CHIRPS version 2.0 (Funk et al., 2015). Combinando imágenes infrarrojo de nubes y datos de estaciones meteorológicas, CHIRPS (*Climate Hazards group Infrared Precipitation with Stations*) estima la cantidad de precipitación recibida a nivel diario, globalmente, con una resolución espacial de 0.05° (~5 km). Dadas estas características, CHIRPS tiene el potencial de proveer información detallada en regiones con una pobre cobertura espacial y temporal de datos climáticos. Tal es el caso de la Mixteca Alta. Con una extensión de ??? km<sup>2</sup>, la región cuenta con tan solo 4 estaciones, todas con vacíos del orden de décadas (obtenido del documento que preparó Quetzal).
 
+Con este reporte buscamos solventar estas carencias, proporcionando una caracterización continua en tiempo y espacio de la lluvia en la Mixteca Alta. Nos enfocamos en analizar tres aspectos principales de los patrones de precipitación de la región: su magnitud (cantidad), su estacionalidad, y su variabilidad interananual. En la primera sección se presenta la climatología de la región, o el comportamiento promedio de la lluvia desde 1981 hasta el 2018. En la segunda sección se reporta un análisis de tendencias durante el mismo periodo cuyo fin fue detectar si ha habido cambios en dichos patrones y dónde.
 
-## Mean weekly amount for all the Mixteca
-```{r}
+# 1. Climatología pluvial de la Mixteca Alta
 
-# With raster:
+```{r intro_estimates, include = FALSE}
 
-# time_tbl <- tibble(time = time_vector, 
-#                    year = year(time),
-#                    month = month(time),
-#                    week = week(time))
-# 
-# week_index <- time_tbl %>% 
-#   group_by(year, week) %>% 
-#   mutate(id = group_indices())
-# 
-# weekly_agg_sp <- stackApply(chirps_stack, week_index$id, sum, na.rm = T)
-# 
-# 
-# week_index %>% 
-#   summarise(id = min(id)) %>% 
-#   ungroup() %>% 
-#   
-#   mutate(precip = pmap_dbl(., function(id, ...){
-#     
-#     weekly_agg_sp[[id]][] %>% 
-#       mean()
-#     
-#   })) %>% 
-#   
-#   group_by(week) %>% 
-#   summarise(precip_mean = mean(precip),
-#             precip_sd = sd(precip)) %>% 
-#   
-#   ggplot(aes(x = week)) +
-#   geom_ribbon(aes(ymin = precip_mean - precip_sd, ymax = precip_mean + precip_sd), fill = "red", alpha = 0.2) +
-#   geom_line(aes(y = precip_mean)) +
-#   scale_x_continuous(breaks = seq(1, 52, 52/12), labels = month.abb, expand = c(0,0)) +
-#   theme(axis.text.x = element_text(hjust = 0),
-#         panel.grid.minor = element_blank(),
-#         axis.title.x = element_blank()) +
-#   labs(y = "mm",
-#        caption = "
-#        Data source: CHIRPS-v2.0")
+# Annual precipitation for the whole region
+annual_map <- tibble(time = st_get_dimension_values(chirps_stars, "time"),
+       year = year(time)) %>% 
   
+  mutate(id = row_number()) %>% 
+  group_by(year) %>% 
+  summarise(min_doy = min(id),
+            max_doy = max(id)) %>% 
+  ungroup() %>% 
   
+  pmap(function(min_doy, max_doy, ...) {
+    
+    chirps_stars %>% 
+      slice("time", min_doy:max_doy) %>% 
+      st_apply(c(1,2), sum, na.rm = T)
+    
+  }) %>% 
   
-# With stars:
+  do.call("c", .) %>% 
+  merge() %>% 
+  setNames("precip")
+
+mean_annual_all <- annual_map %>% 
+  st_apply(c(1,2), mean, na.rm = T) %>% 
+  pull(mean) %>% 
+  mean()
+
+
+# Seasonal precipitation for the whole region
+seasonal_map <- map_df(seq_along(st_get_dimension_values(chirps_stars, "longitude")), function(c){
+  map_df(seq_along(st_get_dimension_values(chirps_stars, "latitude")), function(r){
+    
+    m <- chirps_stars %>% 
+      slice("longitude", c) %>% 
+      slice("latitude", r) %>% 
+      as_tibble() %>% 
+  
+      mutate(year = year(time)) %>% 
+      group_by(year) %>% 
+      mutate(doy = row_number()) %>% 
+      ungroup()
+      
+    n <- m %>% 
+      group_by(doy) %>% 
+      summarize(daily_mean = mean(precip)) %>%
+      mutate(anomaly = daily_mean - mean(m$precip),
+             cum_anomaly = cumsum(anomaly)) %>%
+      summarize(onset = which.min(cum_anomaly),
+                cessation = which.max(cum_anomaly))
+    
+    m %>% 
+      mutate(seas = case_when(doy >= n$onset & doy < n$cessation ~ "wet",
+                              TRUE ~ "dry"),
+             year = ifelse(doy >= n$cessation, year+1, year)) %>% 
+      group_by(seas, year) %>% 
+      summarize(precip = sum(precip)) %>% 
+      mutate(lon = st_get_dimension_values(chirps_stars, "longitude")[c],
+             lat = st_get_dimension_values(chirps_stars, "latitude")[r],
+             c = c,
+             r = r,
+             onset = n$onset,
+             cessation = n$cessation)
+    
+  })
+})
+
+perc_seasonal <- seasonal_map %>%
+  group_by(seas) %>%
+  summarize(precip = mean(precip)) %>% 
+  mutate(perc = precip/sum(precip)*100)
+
+# Mean onset and cessation
+seasonal_map %>% 
+  ungroup() %>% 
+  summarize(onset = as_date(mean(onset)),
+            cessation = as_date(mean(cessation))) 
+```
+
+La Mixteca Alta recibe en promedio `r round(mean_annual_all)` mm de lluvia anuales. La distribución de la precipitación a lo largo del año es marcadamente estacional (Fig. 1). La estación lluviosa, la cual de manera general inicia en mayo y concluye en octubre, concentra el `r perc_seasonal %>% filter(seas == "wet") %>% pull(perc) %>% round()`% de la precipitación anual. Dentro de la estación lluviosa se observa un patrón de distribución bimodal, con máximos a mediados de junio y finales de agosto. Entre los máximos, la precipitación presenta una disminución relativa, o canícula, manifestándose de manera más acentuada a finales de julio.
+
+```{r 1-mean_temporal_dist, fig.height=3, fig.width=6, fig.cap='Fig. 1. Distribución temporal de la precipitación (mm/semana).'}
 
 tibble(time = st_get_dimension_values(chirps_stars, "time"),
        year = year(time),
-       month = month(time),
        week = week(time)) %>% 
   
   mutate(id = row_number()) %>% 
@@ -89,14 +136,10 @@ tibble(time = st_get_dimension_values(chirps_stars, "time"),
   
   mutate(precip = pmap_dbl(., function(min_doy, max_doy, ...) {
     
-    # chirps_stars[["precip"]][,,min_doy:max_doy] %>% 
-    #   apply(c(1,2), sum, na.rm = T) %>% 
-    #   mean()
-    
     chirps_stars %>%
       slice("time", min_doy:max_doy) %>% 
       st_apply(c(1,2), sum, na.rm = T) %>% 
-      .[["sum"]] %>% 
+      pull(sum) %>% 
       mean()
     
   })) %>% 
@@ -115,70 +158,93 @@ tibble(time = st_get_dimension_values(chirps_stars, "time"),
   labs(y = "mm",
        caption = "
        Data source: CHIRPS-v2.0")
-  
-# This does not work:
-# i <- 1L
-# chirps_stars[,,,i]
-# But this does:
-# chirps_stars[,,,1L]
 
 ```
 
-# Spatial distribution of mean annual rainfall
-```{r}
+Con respecto a su distribución espacial, los patrones de precipitación se podrían dividir en dos zonas (Fig. 2). Mientras los valles del noreste son más secos, con acumulaciones de entre 500 y 800 mm al año, la serranía del suroeste es mucho más húmeda, recibiendo entre 1,500 y 2,000 mm al año. [sombra orográfica?]
 
-tibble(time = st_get_dimension_values(chirps_stars, "time"),
-       year = year(time),
-       month = month(time),
-       week = week(time)) %>% 
-  
-  mutate(id = row_number()) %>% 
-  group_by(year) %>% 
-  summarise(min_doy = min(id),
-            max_doy = max(id)) %>%
-  ungroup() %>% 
-  
-  pmap(., function(min_doy, max_doy, ...) {
-    
-    # chirps_stars[["precip"]][,,min_doy:max_doy] %>% 
-    #   apply(c(1,2), sum, na.rm = T) 
-    
-    chirps_stars %>%
-      slice("time", min_doy:max_doy) %>% 
-      st_apply(c(1,2), sum, na.rm = T)
-    
-  }) %>% 
-  
-  # {array(unlist(.), dim = c(nrow(.[[1]]), ncol(.[[1]]), length(.)))} %>% 
-  do.call(c, .) %>% 
-  merge() %>% 
+```{r 2-spatial_distribution_mean_annual, fig.height=4.5, fig.cap='Fig. 2. Distribución espacial de la precipitación media anual.'}
+
+annual_map %>% 
   st_apply(c(1,2), mean, na.rm = T) %>% 
-  # apply(c(1,2), mean, na.rm = T) -> m
   
-  # expand.grid(x = st_get_dimension_values(chirps_stars, "longitude"),
-  #             y = st_get_dimension_values(chirps_stars, "latitude")) %>%
-  #   mutate(precip = as.vector(m)) %>% 
-    
-    # ggplot(data = .) +
-    # geom_raster(aes(x = x, y = y, fill = precip)) +
-    # geom_point(data = locs, aes(x = lon, y = lat)) +
-    # geom_text(data = locs, aes(x = lon, y = lat, label = loc), hjust = 0, nudge_x = 0.03) +
-    # viridis::scale_fill_viridis(option = "C", direction = -1, name = "mm/year") +
-    # coord_quickmap() +
-    # theme(axis.title = element_blank())
-  
-    {ggplot() +
+  {
+    ggplot() +
       geom_stars(data = .) + 
       viridis::scale_fill_viridis(option = "C", direction = -1, name = "mm/year") +
       geom_point(data = locs, aes(x = lon, y = lat)) +
       geom_text(data = locs, aes(x = lon, y = lat, label = loc), vjust = 1, nudge_y = -0.02, nudge_x = 0.05, size = 3) +
       coord_quickmap() +
-      theme(axis.title = element_blank())}
+      theme(axis.title = element_blank())
+    
+  }
   
 ```
 
-# Probability distribution (variability)
-```{r}
+La zona noreste también se distingue de la suroeste en términos de la llegada de la temporada lluviosa (Fig. 3). Mientras para el noreste ésta inicia a principios de mayo, en el suroeste inicia hacia finales del mismo mes. Esta diferencia en fechas no se manifiesta en el final de la temporada lluviosa, ocurriendo de manera generalizada a mediados de octubre para toda la región. Esto sugiere que existe una ligera diferencia regional en la duración de la temporada lluviosa: en el noreste es más larga, aproximadamente por un mes.    
+
+```{r 3-spatial_distribution_seasonality, fig.height=5, fig.cap='Fig. 3. Distribución espacial del inicio y término de la temporada lluviosa.'}
+
+my_breaks <- seq(1, 365, 365/12) %>% round() %>% .[4:12]
+my_labels <- format(as_date(my_breaks), format = "%b")
+
+map(c(which.min, which.max), function(f) {
+  map(seq_len(365), function(i) {
+    
+    tibble(time = st_get_dimension_values(chirps_stars, "time"),
+           year = year(time)) %>% 
+      mutate(id = row_number()) %>% 
+      group_by(year) %>% 
+      mutate(doy = row_number()) %>% 
+      ungroup() %>% 
+      
+      filter(doy == i) %>%
+      
+      {slice(chirps_stars, "time", .$id)} %>% 
+      st_apply(c(1,2), mean, na.rm = T)
+    
+  }) %>% 
+    
+    do.call("c", .) %>% 
+    merge() %>% 
+    
+    st_apply(c(1,2), function(x) {
+      
+      tibble(precip = x,
+             anomaly = precip - mean(precip),
+             cum_anomaly = cumsum(anomaly)) %>% 
+        
+        summarize(seas = f(cum_anomaly)) %>% 
+        pull(seas)
+      
+    })
+    
+}) %>% 
+  
+  do.call("c", .) %>% 
+  setNames(c("onset", "cessation")) %>% 
+  merge() %>% 
+  
+  {
+    ggplot() +
+      geom_stars(data = .) +
+      facet_grid(~X1) +
+      scale_fill_gradientn(colors = RColorBrewer::brewer.pal(11, "Spectral"),
+                        limits = c(92, 365),
+                        breaks = my_breaks,
+                        labels = my_labels,
+                        guide = guide_colorbar(label.vjust = 0, barheight = 8),
+                        name = NULL) +
+    geom_point(data = locs, aes(x = lon, y = lat)) +
+    geom_text(data = locs, aes(x = lon, y = lat, label = loc), vjust = 1, nudge_y = -0.02, nudge_x = 0.05, size = 3) +
+    coord_quickmap() +
+    theme(axis.title = element_blank())
+  }
+  
+```
+
+
+```{r table_spatially_aggregated_mean_annual, include = F}
 
 tibble(time = st_get_dimension_values(chirps_stars, "time"),
        year = year(time)) %>% 
@@ -191,17 +257,19 @@ tibble(time = st_get_dimension_values(chirps_stars, "time"),
   
   mutate(precip = pmap_dbl(., function(min_doy, max_doy, ...) {
     
-    # chirps_stars[["precip"]][,,min_doy:max_doy] %>% 
-    #   apply(c(1,2), sum, na.rm = T) %>% 
-    #   mean()
-    
     chirps_stars %>%
       slice("time", min_doy:max_doy) %>% 
       st_apply(c(1,2), sum, na.rm = T) %>% 
-      .[["sum"]] %>% 
+      pull(sum) %>% 
       mean()
     
   })) -> m
+
+```
+
+Si bien la precipitación media anual de la Mixteca Alta es de `r round(mean_annual_all)` mm, el análisis de su variabilidad interanual indica que uno de cada cinco años, la precipitación disminuye por debajo de `r round(quantile(m$precip, probs=0.2))` mm (una reducción de por lo menos `r round(mean_annual_all) - round(quantile(m$precip, probs=0.2))` mm con respecto a la media) (Fig. 4). Nótese que estos eventos bien pueden ocurrir de manera consecutiva. Por otro lado, uno de cada cinco años, la precipitación excede `r round(quantile(m$precip, probs=0.8))` mm (un aumento de por lo menos `r round(quantile(m$precip, probs=0.8) - round(mean_annual_all))` mm con respecto a la media), pudiendo también ocurrir de manera consecutiva.
+
+```{r 4-density_mean_annual, fig.height=3, fig.width=6, fig.cap='Fig. 4. Frecuencia de la precipitación media anual.'}
   
 tibble(x = density(m$precip, bw = 50)$x,
        y = density(m$precip, bw = 50)$y) %>% 
@@ -233,122 +301,30 @@ tibble(x = density(m$precip, bw = 50)$x,
 
 ```
 
-# Spatial distribution of variability 
-```{r}
-tibble(time = st_get_dimension_values(chirps_stars, "time"),
-       year = year(time),
-       month = month(time),
-       week = week(time)) %>% 
-  
-  mutate(id = row_number()) %>% 
-  group_by(year) %>% 
-  summarise(min_doy = min(id),
-            max_doy = max(id)) %>%
-  ungroup() %>% 
-  
-  pmap(., function(min_doy, max_doy, ...) {
-    
-    # chirps_stars[["precip"]][,,min_doy:max_doy] %>% 
-    #   apply(c(1,2), sum, na.rm = T) 
-    
-    chirps_stars %>%
-      slice("time", min_doy:max_doy) %>% 
-      st_apply(c(1,2), sum, na.rm = T)
-    
-  }) %>% 
-  
-  # {array(unlist(.), dim = c(nrow(.[[1]]), ncol(.[[1]]), length(.)))} %>% 
-  # apply(c(1,2), sd, na.rm = T) -> m
-  
-  do.call(c, .) %>% 
-  merge() %>% 
-  st_apply(c(1,2), sd, na.rm = T) %>% 
+En su dimensión espacial, la variabilidad interanual también sigue un patrón diferenciado entre el noreste y suroeste de la región (Fig. 5). El suroeste tiende a ser más estable, con coeficientes de variación del 12 al 15%. El noreste, por el otro lado, es ligeramente más volátil, con coeficientes de variación que van del 15 al 18%.
 
-# expand.grid(x = st_get_dimension_values(chirps_stars, "longitude"),
-#             y = st_get_dimension_values(chirps_stars, "latitude")) %>%
-#   mutate(precip = as.vector(m)) %>%
-#             
-#   ggplot(data = .) +
-#   geom_raster(aes(x = x, y = y, fill = precip)) +
-#   geom_point(data = locs, aes(x = lon, y = lat)) +
-#   geom_text(data = locs, aes(x = lon, y = lat, label = loc), hjust = 0, nudge_x = 0.03) +
-#   viridis::scale_fill_viridis(option = "C",
-#   direction = -1,
-#   name = "mm/year") +
-#   coord_quickmap() +
-#   theme(axis.title = element_blank())
+```{r 5-spatial_distribution_variability, fig.height=4.5, fig.cap='Fig. 5. Distribución espacial de la variabilidad interanual de la precipitación.'}
 
+annual_map %>% 
+  st_apply(c(1,2), function(x) sd(x)/mean(x)*100) %>% 
+  
   {
-  
     ggplot() +
       geom_stars(data = .) + 
-      viridis::scale_fill_viridis(option = "C", direction = -1, name = "mm/year") +
+      viridis::scale_fill_viridis(option = "C", direction = -1, name = "coeff. of\nvar. (%)") +
       geom_point(data = locs, aes(x = lon, y = lat)) +
       geom_text(data = locs, aes(x = lon, y = lat, label = loc), vjust = 1, nudge_y = -0.02, nudge_x = 0.05, size = 3) +
       coord_quickmap() +
       theme(axis.title = element_blank())
-}
+  }
 
 ```
 
-# Spatial distribution of seasonality
-```{r}
-my_breaks <- seq(1, 365, 365/12) %>% round() %>% .[4:12]
-my_labels <- format(as_date(my_breaks), format = "%b")
+# 2. Tendencias
 
+En la figura 6 se presentan las anomalías pluviales por año con respecto al comportamiento promedio. Se puede observar que en los primeros años del periodo de estudio (i.e. de 1981 a 1994), la Mixteca estuvo bajo condiciones más secas de lo normal. Por el contrario, los últimos años acumularon más lluvia de lo normal (i.e. del 2010 al 2018), con excepción del 2016. Ese año, junto con 1982 y 1988, corresponden a los años más secos dentro del periodo de estudio. Los años 2010, 2014, y 2017 representan los años más húmedos.
 
-# could this work with st_apply?
-
-map_df(seq_along(st_get_dimension_values(chirps_stars, "longitude")), function(c){
-  map_df(seq_along(st_get_dimension_values(chirps_stars, "latitude")), function(r){
-    
-    m <- chirps_stars %>% 
-      slice("longitude", c) %>% 
-      slice("latitude", r) %>% 
-      as_tibble() %>% 
-  
-      mutate(year = year(time)) %>% 
-      group_by(year) %>% 
-      mutate(doy = row_number()) %>% 
-      ungroup()
-      
-    m %>% 
-      group_by(doy) %>% 
-      summarize(daily_mean = mean(precip)) %>% 
-      mutate(anomaly = daily_mean - mean(m$precip),
-             cum_anomaly = cumsum(anomaly)) %>% #.$cum_anomaly %>% plot(type = "l")
-      summarize(onset = which.min(cum_anomaly),
-                cessation = which.max(cum_anomaly)) %>% 
-      mutate(lon = st_get_dimension_values(chirps_stars, "longitude")[c],
-             lat = st_get_dimension_values(chirps_stars, "latitude")[r],
-             c = c,
-             r = r)
-      
-  })
-}) -> seas #%>% 
-
-    gather(onset:cessation, key = seas, val = doy) %>% 
-    mutate(seas = factor(seas, levels = c("onset", "cessation"))) %>% 
-    
-    ggplot(.) +
-    geom_raster(aes(x = lon, y = lat, fill = doy)) +
-    scale_fill_gradientn(colors = RColorBrewer::brewer.pal(11, "Spectral"),
-                        limits = c(92, 365),
-                        breaks = my_breaks,
-                        labels = my_labels,
-                        guide = guide_colorbar(label.vjust = 0, barheight = 8)) +
-    facet_grid(~seas) +
-    geom_point(data = locs, aes(x = lon, y = lat)) +
-    geom_text(data = locs, aes(x = lon, y = lat, label = loc), vjust = 1, nudge_y = -0.02, nudge_x = 0.05, size = 3) +
-    coord_quickmap() +
-    theme(axis.title = element_blank())
-
-```
-
-# CHANGES
-
-## Changes in amount (all Mixteca)
-```{r}
+```{r 6-ggridges_annual, fig.height=8, fig.width=4, out.width='40%', fig.cap='Fig. 6. Anomalías en la precipitación anual'}
 
 tibble(time = st_get_dimension_values(chirps_stars, "time"),
        year = year(time)) %>% 
@@ -391,205 +367,58 @@ tibble(time = st_get_dimension_values(chirps_stars, "time"),
 
 ```
 
-# Significant changes by cell
+El análisis de cambios en la cantidad de lluvia indica que ésta ha ido en aumento durante los últimos 38 años para una extensión considerable de la Mixteca Alta (Fig. 7). Las áreas que exhiben un mayor aumento se ubican en la zona de transición entre los valles del noreste y las serranías del suroeste, con hasta 16 mm adicionales cada año (un incremento total de `r 16*38` mm desde 1981). Hacia el extremo noreste y suroeste no se pudo encontrar tendencia alguna.
 
-```{r}
+```{r 7-spatial_distribution_changes_magnitude, fig.height=4.5, fig.cap='Fig. 7. Cambios en la cantidad de precipitación anual. Celdas marcadas con "X" indican tendencias no dignificativas.'}
 
-tibble(time = st_get_dimension_values(chirps_stars, "time"),
-       year = year(time)) %>% 
-  
-  mutate(id = row_number()) %>% 
-  group_by(year) %>% 
-  summarise(min_doy = min(id),
-            max_doy = max(id)) %>%
-  ungroup() %>% 
-  
-  pmap(., function(min_doy, max_doy, ...) {
-    
-    chirps_stars %>%
-      slice("time", min_doy:max_doy) %>% 
-      st_apply(c(1,2), sum, na.rm = T)
-    
-  }) %>% 
-  
-  do.call("c", .) %>% 
-  merge() -> m
-  
-# This should be Mann-Kendall
-p_val <- m %>% 
+p_val <- annual_map %>% 
     st_apply(c(1,2), function(x){
-      
-      tibble(mm = as.vector(x),
-             year = st_get_dimension_values(chirps_stars, "time") %>% year() %>% unique()) %>% 
         
-        mblm::mblm(mm ~ year, data = ., repeated = F) %>% 
-        summary() %>% 
-        coefficients() %>% 
-        .[2,4] %>% 
-        {ifelse(. > 0.05, 1, NA)}
-      
-      }) %>% 
-  as_tibble() %>% 
-  filter(!is.na(X))
-
-
-  m %>% 
-    st_apply(c(1,2), function(x){
-      
-      tibble(mm = as.vector(x),
-             year = st_get_dimension_values(chirps_stars, "time") %>% year() %>% unique()) %>% 
-        
-        mblm::mblm(mm ~ year, data = ., repeated = F) %>% 
-        summary() %>% 
-        coefficients() %>% 
-        .[2,1]
-      
-      }) %>% 
-    
-      {
-        
-        ggplot() +
-          geom_stars(data = .) +
-          geom_point(data = p_val, aes(x = longitude, y = latitude), shape = 4) +
-          scale_fill_distiller(palette = "RdBu", 
-                               limits = c(-18, 18), 
-                               direction = 1,
-                               breaks = c(-16, 0, 16),
-                               name = "mm/year") +
-          geom_point(data = locs, aes(x = lon, y = lat)) +
-          geom_text(data = locs, aes(x = lon, y = lat, label = loc), vjust = 1, nudge_y = -0.02, nudge_x = 0.05, size = 3) +
-          coord_quickmap() +
-          theme(axis.title = element_blank())
-        
-      }
-  
-  # Test  
-  # chirps_stars[,1,6,] %>% 
-  #   as_tibble() %>% 
-  #   mutate(year = year(time), 
-  #          precip = as.vector(precip)) %>% 
-  #   group_by(year) %>% 
-  #   summarize(precip = sum(precip)) %>% 
-  # {summary(mblm::mblm(precip ~ year, data = ., repeated = F))}
-    
-```
-
-## Changes in variability
-
-```{r}
-
-tibble(time = st_get_dimension_values(chirps_stars, "time"),
-       year = year(time)) %>% 
-  
-  mutate(id = row_number()) %>% 
-  group_by(year) %>% 
-  summarise(min_doy = min(id),
-            max_doy = max(id)) %>%
-  ungroup() %>% 
-  
-  pmap(., function(min_doy, max_doy, ...) {
-    
-    chirps_stars %>%
-      slice("time", min_doy:max_doy) %>% 
-      st_apply(c(1,2), sum, na.rm = T)
-    
-  }) %>% 
-  
-  do.call("c", .) %>% 
-  merge() -> m
-  
-# This should be Mann-Kendall
-p_val <- m %>% 
-    st_apply(c(1,2), function(x){
-      
-      tibble(mm = as.vector(x),
-             year = st_get_dimension_values(chirps_stars, "time") %>% year() %>% unique()) %>% 
-        .$mm %>% 
-        
-        # mblm::mblm(mm ~ year, data = ., repeated = F) %>% 
-        # summary() %>% 
-        # coefficients() %>% 
-        # .[2,4] %>% 
-        
-        trend::mk.test(.) %>% .$p.value %>% 
+        trend::mk.test(x) %>% .$p.value %>% 
         
         {ifelse(. > 0.1, 1, NA)}
       
       }) %>% 
+  
   as_tibble() %>% 
-  filter(!is.na(X))
+  filter(!is.na(precip))
 
 
-  m %>% 
-    st_apply(c(1,2), function(x){
-      
-      tibble(a = as.vector(x)[-length(x)],
-             b = as.vector(x)[-1],
-             dif = abs(a-b),
-             year = st_get_dimension_values(chirps_stars, "time") %>% year() %>% unique() %>% .[-1]) %>% 
-        .$dif %>% 
-        
-        # mblm::mblm(dif ~ year, data = ., repeated = F) %>% 
-        # summary() %>% 
-        # coefficients() %>% 
-        # .[2,1]
-        
-        trend::sens.slope(.) %>% .$estimates %>% as.numeric()
-      
-      }) %>% 
+annual_map %>% 
+  st_apply(c(1,2), function(x){
     
-      {
-        
-        ggplot() +
-          geom_stars(data = .) +
-          geom_point(data = p_val, aes(x = longitude, y = latitude), shape = 4) +
-          scale_fill_distiller(palette = "RdBu",
-                               limits = c(-5.5, 5.5),
-                               direction = -1,
-                               breaks = c(-5, 0, 5),
-                               name = "mm/year") +
-          geom_point(data = locs, aes(x = lon, y = lat)) +
-          geom_text(data = locs, aes(x = lon, y = lat, label = loc), vjust = 1, nudge_y = -0.02, nudge_x = 0.05, size = 3) +
-          coord_quickmap() +
-          theme(axis.title = element_blank())
-        
-      }
+    trend::sens.slope(x) %>% 
+      .$estimates %>% 
+      as.numeric()
+    
+  }) %>% 
   
-  
+  {
+    ggplot() +
+      geom_stars(data = .) +
+      geom_point(data = p_val, aes(x = longitude, y = latitude), shape = 4, alpha = 0.5, size = 2) +
+      scale_fill_distiller(palette = "RdBu", 
+                           limits = c(-18, 18), 
+                           direction = 1,
+                           breaks = c(-16, 0, 16),
+                           name = "mm/year") +
+      geom_point(data = locs, aes(x = lon, y = lat)) +
+      geom_text(data = locs, aes(x = lon, y = lat, label = loc), vjust = 1, nudge_y = -0.02, nudge_x = 0.05, size = 3) +
+      coord_quickmap() +
+      theme(axis.title = element_blank())
+  }
+    
 ```
 
-## Changes in seasonality
-```{r}
+Con respecto a la estacionalidad, nuestro análisis indica que para la porción noreste la temporada lluviosa ha estado llegando gradualmente más tarde (en promedio, poco menos de 1 día mas tarde cada año, lo que significa un cambio de alrededor de 20 días a lo largo de los últimos 38 años) (Fig. 8). El término de la temporada lluviosa para la zona noreste también exhibe una tendencia, en este caso hacia su ocurrencia más temprana. Sin embargo, estas tendencias no parecen significativas. Para el resto de la Mixteca Alta no se detectó ningún cambio considerable en el inicio y término de la temporada lluviosa.
 
-map_df(seq_along(st_get_dimension_values(chirps_stars, "longitude")), function(c){
-  map_df(seq_along(st_get_dimension_values(chirps_stars, "latitude")), function(r){
-    
-    m <- chirps_stars %>% 
-      slice("longitude", c) %>% 
-      slice("latitude", r) %>% 
-      as_tibble() %>% 
+```{r 8-spatial_distribution_changes_season, fig.height=4.5, fig.cap='Fig. 8. Cambios en las fechas de inicio y fin de la temporada lluviosa. Celdas marcadas con "X" indican tendencias no dignificativas.'}
+
+seasonal_map %>% 
+  group_by(lon, lat, c, r, onset, cessation) %>% 
+  summarize() %>%
+  ungroup() %>% 
   
-      mutate(year = year(time)) %>% 
-      group_by(year) %>% 
-      mutate(doy = row_number()) %>% 
-      ungroup()
-      
-    m %>% 
-      group_by(doy) %>% 
-      summarize(daily_mean = mean(precip)) %>% 
-      mutate(anomaly = daily_mean - mean(m$precip),
-             cum_anomaly = cumsum(anomaly)) %>% #.$cum_anomaly %>% plot(type = "l")
-      summarize(onset = which.min(cum_anomaly),
-                cessation = which.max(cum_anomaly)) %>% 
-      mutate(lon = st_get_dimension_values(chirps_stars, "longitude")[c],
-             lat = st_get_dimension_values(chirps_stars, "latitude")[r],
-             c = c,
-             r = r)
-      
-  })
-}) -> seas
-
-seas %>% 
   pmap_df(function(onset, cessation, c, r, lon, lat){
     
     chirps_stars %>% 
@@ -638,33 +467,76 @@ m %>%
   geom_raster(aes(x = lon, y = lat, fill = sen)) +
   geom_point(data = mk, aes(x = lon, y = lat), shape = 4, alpha = 0.5) +
   scale_fill_distiller(palette = "PuOr",
-                               limits = c(-1.1, 1.1),
-                               direction = -1,
-                               breaks = c(-1, 0, 1),
+                       limits = c(-1.1, 1.1),
+                       direction = -1,
+                       breaks = c(-1, 0, 1),
                        labels = c("-1 (later)", "0 (no change)", "1 (sooner)"),
-                               name = "days/year") +
+                       name = "days/year") +
+  geom_point(data = locs, aes(x = lon, y = lat)) +
+  geom_text(data = locs, aes(x = lon, y = lat, label = loc), vjust = 1, nudge_y = -0.02, nudge_x = 0.05, size = 3) +
   facet_grid(~seas) +
   coord_quickmap()
 
 ```
 
+Por último, en cuanto a cambios en la variabilidad interanual, nuestro análisis muestra un ligero aumento en la porción centro-norte, así como una franja en la porción central y en el suroeste (Fig. 9). Sin emargo, en estas últimas, las tendencias observadas no parecen significativas. Reducciones en la variabilidad se observan en el centro-occidente y ligeramente en el centro-oriente. De igual manera, estas tendencias no son significativas según nuestro análisis.
 
-## R Markdown
+```{r 9-spatial_distribution_changess_variability, fig.height=4.5, fig.cap='Fig. 9. Cambios en variabilidad interanual. Celdas marcadas con "X" indican tendencias no significativas.'}
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+p_val <- annual_map %>% 
+    st_apply(c(1,2), function(x){
+      
+      tibble(a = as.vector(x)[-length(x)],
+             b = as.vector(x)[-1],
+             dif = abs(a-b),
+             year = st_get_dimension_values(chirps_stars, "time") %>% 
+               year() %>% 
+               unique() %>% 
+               .[-1]) %>% 
+        pull(dif) %>% 
+        
+        trend::mk.test(.) %>% .$p.value %>% 
+        {ifelse(. > 0.1, 1, NA)}
+        
+      
+    }) %>% 
+  
+  as_tibble() %>% 
+  filter(!is.na(precip))
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+annual_map %>% 
+  st_apply(c(1,2), function(x){
+    
+    tibble(a = as.vector(x)[-length(x)],
+           b = as.vector(x)[-1],
+           dif = abs(a-b),
+           year = st_get_dimension_values(chirps_stars, "time") %>% 
+             year() %>% 
+             unique() %>% 
+             .[-1]) %>% 
+      pull(dif) %>% 
+      
+      trend::sens.slope(.) %>% 
+      .$estimates %>% 
+      as.numeric()
+    
+  }) %>% 
+  
+  {
+    
+    ggplot() +
+      geom_stars(data = .) +
+      geom_point(data = p_val, aes(x = longitude, y = latitude), shape = 4, alpha = 0.5, size = 2) +
+      scale_fill_distiller(palette = "RdBu",
+                           limits = c(-5.5, 5.5),
+                           direction = -1,
+                           breaks = c(-5, 0, 5),
+                           name = "mm/year") +
+      geom_point(data = locs, aes(x = lon, y = lat)) +
+      geom_text(data = locs, aes(x = lon, y = lat, label = loc), vjust = 1, nudge_y = -0.02, nudge_x = 0.05, size = 3) +
+      coord_quickmap() +
+      theme(axis.title = element_blank())
+    
+  }
 
-```{r cars}
-summary(cars)
 ```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
