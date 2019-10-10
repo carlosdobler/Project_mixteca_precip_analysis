@@ -14,7 +14,7 @@ library(tictoc)
 
 
 # Vector of filenames
-chirps_files <- list.files("/home/cdobler/Documents/chirps_data/", full.names = T)
+chirps_files <- list.files("/media/cdobler/PSEUDBOMBAX/raw_data/global_chirps/", full.names = T)
 
 # Create connection with first file
 ncin <- chirps_files[1] %>% 
@@ -36,9 +36,9 @@ func_get_nc_coord <- function(dimension, coord, tol){
 # http://www.scielo.org.mx/pdf/desacatos/n27/n27a2.pdf
 
 max_lon <- func_get_nc_coord(ncin$dim$longitude$vals, -97.007, 0.03)
-min_lon <- func_get_nc_coord(ncin$dim$longitude$vals, -97.909, 0.03)
+min_lon <- func_get_nc_coord(ncin$dim$longitude$vals, -97.829, 0.03)
 max_lat <- func_get_nc_coord(ncin$dim$latitude$vals, 17.794, 0.03)
-min_lat <- func_get_nc_coord(ncin$dim$latitude$vals, 16.505, 0.03)
+min_lat <- func_get_nc_coord(ncin$dim$latitude$vals, 17.072, 0.03)
 
 # (Yucatan peninsula)
 # max_lon <- func_get_nc_coord(ncin$dim$longitude$vals, -86.086, 0.03)

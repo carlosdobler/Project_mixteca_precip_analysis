@@ -3,16 +3,21 @@ title: Caracterización del régimen pluvial de la Mixteca Alta, Oaxaca, y sus c
   (1981 - 2018)
 author: "Carlos Dobler"
 date: "September 4, 2019"
-output: github_document
+output: 
+  html_document: default
+  github_document: default
 editor_options:
   chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
+# rmarkdown::render("02_precip_analysis.Rmd", output_format ="all")
+# https://stackoverflow.com/questions/39662365/knit-one-markdown-file-to-two-output-files/53280491#53280491
+
 knitr::opts_chunk$set(echo = FALSE, 
                       message = FALSE, 
                       warning=FALSE, 
-                      out.width = '70%', 
+                      out.width = '60%', 
                       fig.align = 'center')
 ```
 
@@ -28,7 +33,7 @@ locs <- tribble(
   -97.344, 17.526, "Yanhuitlán",
   -97.572, 17.672, "Tamazulapan",
   -97.679, 17.269, "Tlaxiaco",
-  -97.496, 16.642, "Amoltepec",
+  #-97.496, 16.642, "Amoltepec",
   -97.226, 17.161, "Tamazola"
 )
 
@@ -122,7 +127,7 @@ seasonal_map %>%
 
 La Mixteca Alta recibe en promedio `r round(mean_annual_all)` mm de lluvia anuales. La distribución de la precipitación a lo largo del año es marcadamente estacional (Fig. 1). La estación lluviosa, la cual de manera general inicia en mayo y concluye en octubre, concentra el `r perc_seasonal %>% filter(seas == "wet") %>% pull(perc) %>% round()`% de la precipitación anual. Dentro de la estación lluviosa se observa un patrón de distribución bimodal, con máximos a mediados de junio y finales de agosto. Entre los máximos, la precipitación presenta una disminución relativa, o canícula, manifestándose de manera más acentuada a finales de julio.
 
-```{r 1-mean_temporal_dist, fig.height=3, fig.width=6, fig.cap='Fig. 1. Distribución temporal de la precipitación (mm/semana).'}
+```{r 1-mean_temporal_dist, fig.width=5, fig.asp=0.618, fig.cap='Fig. 1. Distribución temporal de la precipitación (mm/semana).'}
 
 tibble(time = st_get_dimension_values(chirps_stars, "time"),
        year = year(time),
@@ -163,7 +168,7 @@ tibble(time = st_get_dimension_values(chirps_stars, "time"),
 
 Con respecto a su distribución espacial, los patrones de precipitación se podrían dividir en dos zonas (Fig. 2). Mientras los valles del noreste son más secos, con acumulaciones de entre 500 y 800 mm al año, la serranía del suroeste es mucho más húmeda, recibiendo entre 1,500 y 2,000 mm al año. [sombra orográfica?]
 
-```{r 2-spatial_distribution_mean_annual, fig.height=4.5, fig.cap='Fig. 2. Distribución espacial de la precipitación media anual.'}
+```{r 2-spatial_distribution_mean_annual, fig.width=5, fig.height=2.5, fig.cap='Fig. 2. Distribución espacial de la precipitación media anual.'}
 
 annual_map %>% 
   st_apply(c(1,2), mean, na.rm = T) %>% 
@@ -183,7 +188,7 @@ annual_map %>%
 
 La zona noreste también se distingue de la suroeste en términos de la llegada de la temporada lluviosa (Fig. 3). Mientras para el noreste ésta inicia a principios de mayo, en el suroeste inicia hacia finales del mismo mes. Esta diferencia en fechas no se manifiesta en el final de la temporada lluviosa, ocurriendo de manera generalizada a mediados de octubre para toda la región. Esto sugiere que existe una ligera diferencia regional en la duración de la temporada lluviosa: en el noreste es más larga, aproximadamente por un mes.    
 
-```{r 3-spatial_distribution_seasonality, fig.height=5, fig.cap='Fig. 3. Distribución espacial del inicio y término de la temporada lluviosa.'}
+```{r 3-spatial_distribution_seasonality, fig.width=5, fig.height=2.5, fig.cap='Fig. 3. Distribución espacial del inicio y término de la temporada lluviosa.'}
 
 my_breaks <- seq(1, 365, 365/12) %>% round() %>% .[4:12]
 my_labels <- format(as_date(my_breaks), format = "%b")
@@ -269,7 +274,7 @@ tibble(time = st_get_dimension_values(chirps_stars, "time"),
 
 Si bien la precipitación media anual de la Mixteca Alta es de `r round(mean_annual_all)` mm, el análisis de su variabilidad interanual indica que uno de cada cinco años, la precipitación disminuye por debajo de `r round(quantile(m$precip, probs=0.2))` mm (una reducción de por lo menos `r round(mean_annual_all) - round(quantile(m$precip, probs=0.2))` mm con respecto a la media) (Fig. 4). Nótese que estos eventos bien pueden ocurrir de manera consecutiva. Por otro lado, uno de cada cinco años, la precipitación excede `r round(quantile(m$precip, probs=0.8))` mm (un aumento de por lo menos `r round(quantile(m$precip, probs=0.8) - round(mean_annual_all))` mm con respecto a la media), pudiendo también ocurrir de manera consecutiva.
 
-```{r 4-density_mean_annual, fig.height=3, fig.width=6, fig.cap='Fig. 4. Frecuencia de la precipitación media anual.'}
+```{r 4-density_mean_annual, fig.width=5, fig.asp=0.618, fig.cap='Fig. 4. Frecuencia de la precipitación media anual.'}
   
 tibble(x = density(m$precip, bw = 50)$x,
        y = density(m$precip, bw = 50)$y) %>% 
@@ -303,7 +308,7 @@ tibble(x = density(m$precip, bw = 50)$x,
 
 En su dimensión espacial, la variabilidad interanual también sigue un patrón diferenciado entre el noreste y suroeste de la región (Fig. 5). El suroeste tiende a ser más estable, con coeficientes de variación del 12 al 15%. El noreste, por el otro lado, es ligeramente más volátil, con coeficientes de variación que van del 15 al 18%.
 
-```{r 5-spatial_distribution_variability, fig.height=4.5, fig.cap='Fig. 5. Distribución espacial de la variabilidad interanual de la precipitación.'}
+```{r 5-spatial_distribution_variability, fig.width=5, fig.height=2.5, fig.cap='Fig. 5. Distribución espacial de la variabilidad interanual de la precipitación.'}
 
 annual_map %>% 
   st_apply(c(1,2), function(x) sd(x)/mean(x)*100) %>% 
@@ -324,7 +329,7 @@ annual_map %>%
 
 En la figura 6 se presentan las anomalías pluviales por año con respecto al comportamiento promedio. Se puede observar que en los primeros años del periodo de estudio (i.e. de 1981 a 1994), la Mixteca estuvo bajo condiciones más secas de lo normal. Por el contrario, los últimos años acumularon más lluvia de lo normal (i.e. del 2010 al 2018), con excepción del 2016. Ese año, junto con 1982 y 1988, corresponden a los años más secos dentro del periodo de estudio. Los años 2010, 2014, y 2017 representan los años más húmedos.
 
-```{r 6-ggridges_annual, fig.height=8, fig.width=4, out.width='40%', fig.cap='Fig. 6. Anomalías en la precipitación anual. El área bajo la curva corresponde a la extensión total de la zona de estudio. Distribuciones hacia percentiles por debajo de 0.5 indican condiciones más secas de lo normal, mientras aquellas por arriba de 0.5 indican acumulaciones excedentes.'}
+```{r 6-ggridges_annual, fig.height=8, fig.width=4, out.width='50%', fig.cap='Fig. 6. Anomalías en la precipitación anual. El área bajo la curva corresponde a la extensión total de la zona de estudio. Distribuciones hacia percentiles por debajo de 0.5 indican condiciones más secas de lo normal, mientras aquellas por arriba de 0.5 indican acumulaciones excedentes.'}
 
 tibble(time = st_get_dimension_values(chirps_stars, "time"),
        year = year(time)) %>% 
@@ -369,7 +374,7 @@ tibble(time = st_get_dimension_values(chirps_stars, "time"),
 
 El análisis de cambios en la cantidad de lluvia indica que ésta ha ido en aumento durante los últimos 38 años para una extensión considerable de la Mixteca Alta (Fig. 7). Las áreas que exhiben un mayor aumento se ubican en la zona de transición entre los valles del noreste y las serranías del suroeste, con hasta 16 mm adicionales cada año (un incremento total de `r 16*38` mm desde 1981). Hacia el extremo noreste y suroeste no se pudo encontrar tendencia alguna.
 
-```{r 7-spatial_distribution_changes_magnitude, fig.height=4.5, fig.cap='Fig. 7. Cambios en la cantidad de precipitación anual. Celdas marcadas con "X" indican tendencias no significativas.'}
+```{r 7-spatial_distribution_changes_magnitude, fig.width=5, fig.height=2.5, fig.cap='Fig. 7. Cambios en la cantidad de precipitación anual. Celdas marcadas con "X" indican tendencias no significativas.'}
 
 p_val <- annual_map %>% 
     st_apply(c(1,2), function(x){
@@ -412,7 +417,7 @@ annual_map %>%
 
 Con respecto a la estacionalidad, nuestro análisis indica que para la porción noreste, la temporada lluviosa ha estado llegando gradualmente más tarde (en promedio, poco menos de 1 día mas tarde cada año, lo que significa un cambio de alrededor de 20 días a lo largo de los últimos 38 años) (Fig. 8). El término de la temporada lluviosa para la zona noreste también exhibe una tendencia, en este caso hacia su ocurrencia más temprana. Sin embargo, estas tendencias no parecen significativas. Para el resto de la Mixteca Alta no se detectó ningún cambio considerable en el inicio y término de la temporada lluviosa.
 
-```{r 8-spatial_distribution_changes_season, fig.height=4.5, fig.cap='Fig. 8. Cambios en las fechas de inicio y fin de la temporada lluviosa. Celdas marcadas con "X" indican tendencias no significativas.'}
+```{r 8-spatial_distribution_changes_season, fig.width=5, fig.height=2.5, fig.cap='Fig. 8. Cambios en las fechas de inicio y fin de la temporada lluviosa. Celdas marcadas con "X" indican tendencias no significativas.'}
 
 seasonal_map %>% 
   group_by(lon, lat, c, r, onset, cessation) %>% 
@@ -481,7 +486,7 @@ m %>%
 
 Por último, en cuanto a cambios en la variabilidad interanual, nuestro análisis muestra un ligero aumento en la porción centro-norte, así como una franja en la porción central y en el suroeste (Fig. 9). Sin emargo, en estas últimas, las tendencias observadas no parecen significativas. Diminución en la variabilidad interanual se observa en el centro-occidente y ligeramente en el centro-oriente. De igual manera, estas tendencias no son significativas según nuestro análisis.
 
-```{r 9-spatial_distribution_changess_variability, fig.height=4.5, fig.cap='Fig. 9. Cambios en variabilidad interanual. Celdas marcadas con "X" indican tendencias no significativas.'}
+```{r 9-spatial_distribution_changess_variability, fig.width=5, fig.height=2.5, fig.cap='Fig. 9. Cambios en variabilidad interanual. Celdas marcadas con "X" indican tendencias no significativas.'}
 
 p_val <- annual_map %>% 
     st_apply(c(1,2), function(x){
