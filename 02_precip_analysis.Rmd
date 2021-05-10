@@ -151,8 +151,8 @@ tibble(time = st_get_dimension_values(chirps_stars, "time"),
     
     chirps_stars %>%
       slice("time", min_doy:max_doy) %>% 
-      st_apply(c(1,2), sum, na.rm = T) %>% 
-      pull(sum) %>% 
+      st_apply(c(1,2), function(x) sum(x, na.rm = T)) %>% 
+      pull(precip) %>% 
       mean()
     
   })) %>% 
@@ -240,8 +240,8 @@ map(c(which.min, which.max), function(f) {
   
   {
     ggplot() +
-      geom_stars(data = .) +
-      facet_grid(~X1) +
+      geom_stars(data = t) +
+      facet_grid(~attributes) +
       scale_fill_gradientn(colors = RColorBrewer::brewer.pal(11, "Spectral"),
                         limits = c(92, 365),
                         breaks = my_breaks,
@@ -272,8 +272,8 @@ tibble(time = st_get_dimension_values(chirps_stars, "time"),
     
     chirps_stars %>%
       slice("time", min_doy:max_doy) %>% 
-      st_apply(c(1,2), sum, na.rm = T) %>% 
-      pull(sum) %>% 
+      st_apply(c(1,2), function(x) sum(x, na.rm = T)) %>% 
+      pull(precip) %>% 
       mean()
     
   })) -> m
@@ -352,7 +352,7 @@ tibble(time = st_get_dimension_values(chirps_stars, "time"),
     
     chirps_stars %>%
       slice("time", min_doy:max_doy) %>% 
-      st_apply(c(1,2), sum, na.rm = T)
+      st_apply(c(1,2), function(x) sum(x, na.rm = T))
     
   }) %>% 
   
