@@ -13,7 +13,7 @@ library(lubridate)
 library(tictoc)
 
 
-# Vector of filenames
+# Vector of filenames (external dataset)
 chirps_files <- list.files("/media/cdobler/PSEUDBOMBAX/raw_data/global_chirps/", full.names = T)
 
 # Create connection with first file
@@ -87,9 +87,10 @@ chirps_stars <- map(seq_along(chirps_files), function(yr){
   
 }) %>% 
   do.call(c, .) # Combine
-toc() # 20.87 sec
+toc() # 80 sec
 
-rm(list=setdiff(ls(), "chirps_stars"))
+# rm(list=setdiff(ls(), "chirps_stars"))
+write_rds(chirps_stars, path = "output/chirps_stars.RDS")
 
 # END *********************************************************************************************
 

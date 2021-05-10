@@ -5,7 +5,6 @@ author: "Carlos Dobler"
 date: "September 4, 2019"
 output: 
   html_document: default
-  github_document: default
 editor_options:
   chunk_output_type: console
 ---
@@ -24,7 +23,16 @@ knitr::opts_chunk$set(echo = FALSE,
 ```{r prep, include = FALSE}
 
 # Load stars object
-source(here::here("01_prepare_array.R")) # ~ 20 sec
+# source(here::here("01_prepare_array.R")) # ~ 20 sec
+
+
+# Load libraries
+library(stars)
+library(ncdf4)
+library(tidyverse)
+library(lubridate)
+
+read_rds("output/chirps_stars.RDS") -> chirps_stars
 
 # Towns of reference
 locs <- tribble(
@@ -61,7 +69,7 @@ annual_map <- tibble(time = st_get_dimension_values(chirps_stars, "time"),
     
     chirps_stars %>% 
       slice("time", min_doy:max_doy) %>% 
-      st_apply(c(1,2), sum, na.rm = T)
+      st_apply(c(1,2), function(x) sum(x, na.rm = T))
     
   }) %>% 
   
